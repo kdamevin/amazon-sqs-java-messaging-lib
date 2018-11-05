@@ -14,6 +14,17 @@
  */
 package com.amazon.sqs.javamessaging.message;
 
+import com.amazon.sqs.javamessaging.SQSMessageConsumerPrefetch;
+import com.amazon.sqs.javamessaging.SQSMessagingClientConstants;
+import com.amazon.sqs.javamessaging.SQSQueueDestination;
+import com.amazon.sqs.javamessaging.acknowledge.Acknowledger;
+import com.amazonaws.services.sqs.model.MessageAttributeValue;
+
+import javax.jms.Destination;
+import javax.jms.JMSException;
+import javax.jms.Message;
+import javax.jms.MessageFormatException;
+import javax.jms.MessageNotWriteableException;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
 import java.util.Date;
@@ -23,19 +34,25 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import javax.jms.Destination;
-import javax.jms.JMSException;
-import javax.jms.Message;
-import javax.jms.MessageFormatException;
-import javax.jms.MessageNotWriteableException;
-
-import com.amazon.sqs.javamessaging.SQSMessageConsumerPrefetch;
-import com.amazon.sqs.javamessaging.SQSMessagingClientConstants;
-import com.amazon.sqs.javamessaging.SQSQueueDestination;
-import com.amazon.sqs.javamessaging.acknowledge.Acknowledger;
-import com.amazonaws.services.sqs.model.MessageAttributeValue;
-
-import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.*;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.APPROXIMATE_RECEIVE_COUNT;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.BOOLEAN;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.BYTE;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.DOUBLE;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.FLOAT;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.INT;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.INT_FALSE;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.INT_TRUE;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.JMSX_DELIVERY_COUNT;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.JMSX_GROUP_ID;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.JMS_SQS_DEDUPLICATION_ID;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.JMS_SQS_SEQUENCE_NUMBER;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.LONG;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.MESSAGE_DEDUPLICATION_ID;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.MESSAGE_GROUP_ID;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.NUMBER;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.SEQUENCE_NUMBER;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.SHORT;
+import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.STRING;
 
 /**
  * The SQSMessage is the root class of all SQS JMS messages and implements JMS
@@ -59,9 +76,9 @@ import static com.amazon.sqs.javamessaging.SQSMessagingClientConstants.*;
  * approximate receive count observed on the SQS side.
  */
 public class SQSMessage implements Message {
-        
+
     private static final Charset DEFAULT_CHARSET = Charset.forName("UTF-8");
-    
+
     // Define constant message types.
     public static final String BYTE_MESSAGE_TYPE = "byte";
     public static final String OBJECT_MESSAGE_TYPE = "object";
@@ -69,7 +86,7 @@ public class SQSMessage implements Message {
     public static final String JMS_SQS_MESSAGE_TYPE = "JMS_SQSMessageType";
     public static final String JMS_SQS_REPLY_TO_QUEUE_NAME = "JMS_SQSReplyToQueueName";
     public static final String JMS_SQS_REPLY_TO_QUEUE_URL = "JMS_SQSReplyToQueueURL";
-    
+
     // Default JMS Message properties
     private int deliveryMode = Message.DEFAULT_DELIVERY_MODE;
     private int priority = Message.DEFAULT_PRIORITY;
@@ -88,10 +105,10 @@ public class SQSMessage implements Message {
     private boolean writePermissionsForBody;
 
     /**
-     * Function for acknowledging message. 
+     * Function for acknowledging message.
      */
     private Acknowledger acknowledger;
-    
+
     /**
      * Original SQS Message ID.
      */
@@ -117,7 +134,7 @@ public class SQSMessage implements Message {
         this.setSQSMessageId(sqsMessage.getMessageId());
         Map<String,String> systemAttributes = sqsMessage.getAttributes();
         int receiveCount = Integer.parseInt(systemAttributes.get(APPROXIMATE_RECEIVE_COUNT));
-        
+
         /**
          * JMSXDeliveryCount is set based on SQS ApproximateReceiveCount
          * attribute.
@@ -139,7 +156,7 @@ public class SQSMessage implements Message {
         writePermissionsForBody = false;
         writePermissionsForProperties = false;
     }
-    
+
     private void mapSystemAttributeToJmsMessageProperty(Map<String,String> systemAttributes, String systemAttributeName, String jmsMessagePropertyName) throws JMSException {
         String systemAttributeValue = systemAttributes.get(systemAttributeName);
         if (systemAttributeValue != null) {
@@ -169,65 +186,65 @@ public class SQSMessage implements Message {
             throw new MessageNotWriteableException("Message properties are not writable");
         }
     }
-    
+
     protected void checkBodyWritePermissions() throws JMSException {
         if (!writePermissionsForBody) {
             throw new MessageNotWriteableException("Message body is not writable");
         }
     }
-    
+
     protected static JMSException convertExceptionToJMSException(Exception e) {
         JMSException ex = new JMSException(e.getMessage());
         ex.initCause(e);
         return ex;
     }
-    
+
     protected static MessageFormatException convertExceptionToMessageFormatException(Exception e) {
         MessageFormatException ex = new MessageFormatException(e.getMessage());
         ex.initCause(e);
         return ex;
     }
-    
+
     protected void setBodyWritePermissions(boolean enable) {
         writePermissionsForBody = enable;
     }
-    
+
     /**
      * Get SQS Message Group Id (applicable for FIFO queues, available also as JMS property 'JMSXGroupId')
-     * @throws JMSException 
+     * @throws JMSException
      */
     public String getSQSMessageGroupId() throws JMSException {
         return getStringProperty(SQSMessagingClientConstants.JMSX_GROUP_ID);
     }
-    
+
     /**
      * Get SQS Message Deduplication Id (applicable for FIFO queues, available also as JMS property 'JMS_SQS_DeduplicationId')
-     * @throws JMSException 
+     * @throws JMSException
      */
     public String getSQSMessageDeduplicationId() throws JMSException {
         return getStringProperty(SQSMessagingClientConstants.JMS_SQS_DEDUPLICATION_ID);
     }
-    
+
     /**
      * Get SQS Message Sequence Number (applicable for FIFO queues, available also as JMS property 'JMS_SQS_SequenceNumber')
-     * @throws JMSException 
+     * @throws JMSException
      */
     public String getSQSMessageSequenceNumber() throws JMSException {
         return getStringProperty(SQSMessagingClientConstants.JMS_SQS_SEQUENCE_NUMBER);
     }
-    
+
     /**
      * Get SQS Message Id.
-     * 
+     *
      * @return SQS Message Id.
      */
     public String getSQSMessageId() {
         return sqsMessageID;
     }
-    
+
     /**
      * Set SQS Message Id, used on send.
-     * 
+     *
      * @param sqsMessageID
      *            messageId assigned by SQS during send.
      */
@@ -235,10 +252,10 @@ public class SQSMessage implements Message {
         this.sqsMessageID = sqsMessageID;
         this.setJMSMessageID(String.format(SQSMessagingClientConstants.MESSAGE_ID_FORMAT, sqsMessageID));
     }
-        
+
     /**
      * Get SQS Message receiptHandle.
-     * 
+     *
      * @return SQS Message receiptHandle.
      */
     public String getReceiptHandle() {
@@ -247,33 +264,33 @@ public class SQSMessage implements Message {
 
     /**
      * Get queueUrl the message came from.
-     * 
+     *
      * @return queueUrl.
      */
     public String getQueueUrl() {
         return queueUrl;
     }
-    
+
     /**
      * Gets the message ID.
      * <P>
      * The JMSMessageID header field contains a value that uniquely identifies
      * each message sent by a provider. It is set to SQS messageId with the
      * prefix 'ID:'.
-     * 
+     *
      * @return the ID of the message.
      */
     @Override
     public String getJMSMessageID() throws JMSException {
         return messageID;
     }
-    
+
     /**
      * Sets the message ID. It should have prefix 'ID:'.
      * <P>
      * Set when a message is sent. This method can be used to change the value
      * for a message that has been received.
-     * 
+     *
      * @param id
      *            The ID of the message.
      */
@@ -328,7 +345,7 @@ public class SQSMessage implements Message {
         }
         this.replyTo = (SQSQueueDestination)replyTo;
     }
-    
+
     /**
      * Gets the Destination object for this message.
      * <P>
@@ -341,20 +358,20 @@ public class SQSMessage implements Message {
      * <P>
      * When a message is received, its JMSDestination value must be equivalent
      * to the value assigned when it was sent.
-     * 
+     *
      * @return The destination of this message.
      */
     @Override
     public Destination getJMSDestination() throws JMSException {
         return destination;
     }
-    
+
     /**
      * Sets the Destination object for this message.
      * <P>
      * Set when a message is sent. This method can be used to change the value
      * for a message that has been received.
-     * 
+     *
      * @param destination
      *            The destination for this message.
      */
@@ -412,7 +429,7 @@ public class SQSMessage implements Message {
     public void setJMSPriority(int priority) throws JMSException {
         this.priority = priority;
     }
-    
+
     /**
      * Clears a message's properties and set the write permissions for
      * properties. The message's header fields and body are not cleared.
@@ -422,10 +439,10 @@ public class SQSMessage implements Message {
         properties.clear();
         writePermissionsForProperties = true;
     }
-    
+
     /**
      * Indicates whether a property value exists for the given property name.
-     * 
+     *
      * @param name
      *            The name of the property.
      * @return true if the property exists.
@@ -438,7 +455,7 @@ public class SQSMessage implements Message {
     /**
      * Get the value for a property that represents a java primitive(e.g. int or
      * long).
-     * 
+     *
      * @param property
      *            The name of the property to get.
      * @param type
@@ -481,11 +498,11 @@ public class SQSMessage implements Message {
             throw new NumberFormatException("Value of property with name " + name + " is null.");
         }
     }
-    
+
     /**
      * Returns the value of the <code>boolean</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>boolean</code> property value for the specified name.
@@ -500,11 +517,11 @@ public class SQSMessage implements Message {
     public boolean getBooleanProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Boolean.class);
     }
-    
+
     /**
      * Returns the value of the <code>byte</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>byte</code> property value for the specified name.
@@ -521,11 +538,11 @@ public class SQSMessage implements Message {
     public byte getByteProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Byte.class);
     }
-    
+
     /**
      * Returns the value of the <code>short</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>short</code> property value for the specified name.
@@ -542,11 +559,11 @@ public class SQSMessage implements Message {
     public short getShortProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Short.class);
     }
-    
+
     /**
      * Returns the value of the <code>int</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>int</code> property value for the specified name.
@@ -563,11 +580,11 @@ public class SQSMessage implements Message {
     public int getIntProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Integer.class);
     }
-    
+
     /**
      * Returns the value of the <code>long</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>long</code> property value for the specified name.
@@ -584,11 +601,11 @@ public class SQSMessage implements Message {
     public long getLongProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Long.class);
     }
-    
+
     /**
      * Returns the value of the <code>float</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>float</code> property value for the specified name.
@@ -603,11 +620,11 @@ public class SQSMessage implements Message {
     public float getFloatProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Float.class);
     }
-    
+
     /**
      * Returns the value of the <code>double</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>double</code> property value for the specified name.
@@ -622,11 +639,11 @@ public class SQSMessage implements Message {
     public double getDoubleProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, Double.class);
     }
-    
+
     /**
      * Returns the value of the <code>String</code> property with the specified
      * name.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the <code>String</code> property value for the specified name.
@@ -641,7 +658,7 @@ public class SQSMessage implements Message {
     public String getStringProperty(String name) throws JMSException {
         return getPrimitiveProperty(name, String.class);
     }
-    
+
     /**
      * Returns the value of the Java object property with the specified name.
      * <P>
@@ -649,7 +666,7 @@ public class SQSMessage implements Message {
      * been stored as a property in the message with the equivalent
      * <code>setObjectProperty</code> method call, or its equivalent primitive
      * setter method.
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return the Java object property value with the specified name, in boxed
@@ -667,12 +684,12 @@ public class SQSMessage implements Message {
         }
         return null;
     }
-    
+
     /**
      * Returns the property value with message attribute to object property
      * conversions took place.
      * <P>
-     * 
+     *
      * @param name
      *            The name of the property to get.
      * @return <code>JMSMessagePropertyValue</code> with object value and
@@ -702,13 +719,13 @@ public class SQSMessage implements Message {
             return propertyItr.next();
         }
     }
-    
+
     /**
      * Returns an <code>Enumeration</code> of all the property names.
      * <P>
      * Note that JMS standard header fields are not considered properties and
      * are not returned in this enumeration.
-     * 
+     *
      * @return an enumeration of all the names of property values.
      * @throws JMSException
      *             On internal error.
@@ -717,11 +734,11 @@ public class SQSMessage implements Message {
     public Enumeration<String> getPropertyNames() throws JMSException {
         return new PropertyEnum(properties.keySet().iterator());
     }
-    
+
     /**
      * Sets a <code>boolean</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -737,11 +754,11 @@ public class SQSMessage implements Message {
     public void setBooleanProperty(String name, boolean value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>byte</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -757,11 +774,11 @@ public class SQSMessage implements Message {
     public void setByteProperty(String name, byte value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>short</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -777,11 +794,11 @@ public class SQSMessage implements Message {
     public void setShortProperty(String name, short value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>int</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -797,11 +814,11 @@ public class SQSMessage implements Message {
     public void setIntProperty(String name, int value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>long</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -817,11 +834,11 @@ public class SQSMessage implements Message {
     public void setLongProperty(String name, long value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>float</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -837,11 +854,11 @@ public class SQSMessage implements Message {
     public void setFloatProperty(String name, float value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>double</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -857,11 +874,11 @@ public class SQSMessage implements Message {
     public void setDoubleProperty(String name, double value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a <code>String</code> property value with the specified name into
      * the message.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -877,14 +894,14 @@ public class SQSMessage implements Message {
     public void setStringProperty(String name, String value) throws JMSException {
         setObjectProperty(name, value);
     }
-    
+
     /**
      * Sets a Java object property value with the specified name into the
      * message.
      * <P>
      * Note that this method works only for the boxed primitive object types
      * (Integer, Double, Long ...) and String objects.
-     * 
+     *
      * @param name
      *            The name of the property to set.
      * @param value
@@ -912,7 +929,7 @@ public class SQSMessage implements Message {
         checkPropertyWritePermissions();
         properties.put(name, new JMSMessagePropertyValue(value));
     }
-    
+
     /**
      * <P>
      * Acknowledges message(s).
@@ -927,7 +944,7 @@ public class SQSMessage implements Message {
      * If the session is closed, messages cannot be acknowledged.
      * <P>
      * If only the consumer is closed, messages can still be acknowledged.
-     * 
+     *
      * @see com.amazon.sqs.javamessaging.acknowledge.AcknowledgeMode
      * @throws JMSException
      *             On Internal error
@@ -940,7 +957,7 @@ public class SQSMessage implements Message {
             acknowledger.acknowledge(this);
         }
     }
-    
+
     /**
      * <P>
      * Clears out the message body. Clearing a message's body does not clear its
@@ -948,7 +965,7 @@ public class SQSMessage implements Message {
      * <P>
      * This method cannot be called directly instead the implementation on the
      * subclasses should be used.
-     * 
+     *
      * @throws JMSException
      *             If directly called
      */
@@ -979,7 +996,7 @@ public class SQSMessage implements Message {
                 this.from = from;
                 this.to = to;
             }
-            
+
             @Override
             public int hashCode() {
                 final int prime = 31;
@@ -1121,25 +1138,25 @@ public class SQSMessage implements Message {
 
         }
     }
-    
+
     /**
      * This class is used fulfill object value, corresponding SQS message
      * attribute type and message attribute string value.
      */
     public static class JMSMessagePropertyValue {
-        
+
         private final Object value;
 
         private final String type;
-        
+
         private final String stringMessageAttributeValue;
-        
+
         public JMSMessagePropertyValue(String stringValue, String type) throws JMSException{
             this.type = type;
             this.value = getObjectValue(stringValue, type);
             this.stringMessageAttributeValue = stringValue;
         }
-        
+
         public JMSMessagePropertyValue(Object value) throws JMSException {
             this.type = getType(value);
             this.value = value;
@@ -1153,7 +1170,7 @@ public class SQSMessage implements Message {
                 stringMessageAttributeValue = value.toString();
             }
         }
-        
+
         public JMSMessagePropertyValue(Object value, String type) throws JMSException {
             this.value = value;
             this.type = type;
@@ -1167,7 +1184,7 @@ public class SQSMessage implements Message {
                 stringMessageAttributeValue = value.toString();
             }
         }
-        
+
         private static String getType(Object value) throws JMSException {
             if (value instanceof String) {
                 return STRING;
@@ -1210,10 +1227,13 @@ public class SQSMessage implements Message {
                 return Float.valueOf(value);
             } else if (SHORT.equals(type)) {
                 return Short.valueOf(value);
-            } else {
+            } else if (NUMBER.equals(type)) {
+                // This may not be a JMS Type but it is a SQS Type, so we had better support it.
+                return value;
+            }else {
                 throw new JMSException(type + " is not a supported JMS property type");
             }
-        }        
+        }
 
         public String getType() {
             return type;
@@ -1222,7 +1242,7 @@ public class SQSMessage implements Message {
         public Object getValue() {
             return value;
         }
-        
+
         public String getStringMessageAttributeValue() {
             return stringMessageAttributeValue;
         }
@@ -1231,9 +1251,9 @@ public class SQSMessage implements Message {
 
     /**
      * This method sets the JMS_SQS_SEQUENCE_NUMBER property on the message. It is exposed explicitly here, so that
-     * it can be invoked even on read-only message object obtained through receing a message. 
+     * it can be invoked even on read-only message object obtained through receing a message.
      * This support the use case of send a received message by using the same JMSMessage object.
-     * 
+     *
      * @param sequenceNumber Sequence number to set. If null or empty, the stored sequence number will be removed.
      * @throws JMSException
      */

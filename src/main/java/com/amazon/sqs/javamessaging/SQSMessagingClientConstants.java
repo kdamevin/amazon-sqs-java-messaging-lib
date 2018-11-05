@@ -36,6 +36,12 @@ public class SQSMessagingClientConstants {
      */
     public static final String STRING = "String";
 
+    /**
+     * SQS Message Attribute data type.
+     * https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-message-attributes.html
+     */
+    public static final String NUMBER = "Number";
+
     public static final String INT = "Number.int";
 
     public static final String BOOLEAN = "Number.Boolean";

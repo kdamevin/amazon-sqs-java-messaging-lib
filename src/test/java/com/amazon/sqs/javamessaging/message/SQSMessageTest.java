@@ -67,6 +67,7 @@ public class SQSMessageTest {
         when(mockSQSSession.createMessage()).thenReturn(new SQSMessage());
         Message message = mockSQSSession.createMessage();
 
+
         message.setBooleanProperty("myTrueBoolean", true);
         message.setBooleanProperty("myFalseBoolean", false);
         message.setIntProperty("myInteger", 100);
